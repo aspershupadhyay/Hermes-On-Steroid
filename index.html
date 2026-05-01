@@ -13,6 +13,45 @@
       }
       #root { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
     </style>
+    <script>
+    // Browser polyfill for Electron IPC (preload.ts bridge)
+    // All methods are no-ops that return safe defaults
+    window.api = {
+      version: '1.0.0',
+      savePngBatch: async () => ({ ok: false, error: 'not available in browser' }),
+      saveSession: () => {},
+      loadSession: async () => null,
+      downloadBrowserImage: async () => ({ tmpPath: '', success: false, sizeKb: 0 }),
+      onAuthComplete: () => {},
+      openAuthPopup: async () => {},
+      openExternal: async () => {},
+      clearBrowserData: async () => {},
+      clearSiteData: async () => ({ removed: 0 }),
+      authStart: async () => ({ url: '', codeVerifier: '', state: '' }),
+      onAuthResult: () => () => {},
+      authValidate: async () => ({ ok: false, error: 'not available in browser' }),
+      authLogout: async () => ({ ok: false }),
+      readLocalImage: async () => null,
+      log: () => {},
+      onImageDownloadReady: () => () => {},
+      getSystemFonts: async () => [],
+      showContextMenu: async () => {},
+      onBrowserEvent: () => () => {},
+      startImageGen: undefined,
+      cancelImageGen: async () => {},
+      onImageGenProgress: undefined,
+      getImageGenConfig: async () => ({ chatGptUrl: '' }),
+      setImageGenUrl: async () => {},
+      setupCheck: async () => ({ needsSetup: true, backendStatus: 'down', missingDeps: [] }),
+      setupSaveConfig: async () => ({ ok: false, error: 'not available in browser' }),
+      restartBackend: undefined,
+      onBackendStatus: undefined,
+      onCanvasCommand: undefined,
+      sendCanvasResult: () => {},
+      onAppCommand: undefined,
+      sendAppResult: () => {},
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
