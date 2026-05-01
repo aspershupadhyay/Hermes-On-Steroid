@@ -1,0 +1,231 @@
+{
+  "name": "creator-os",
+  "version": "1.1.2",
+  "description": "CreatorOS — AI-powered social media content & design automation",
+  "author": "Sparsh Upadhyay",
+  "main": "main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:backend": "cd backend && pyinstaller backend.spec -y",
+    "build:mcp": "tsc -p mcp/tsconfig.json",
+    "mcp": "node mcp/dist/server.js",
+    "mcp:http": "node mcp/dist/server.js --http",
+    "mcp:tunnel": "concurrently \"node mcp/dist/server.js --http\" \"cloudflared tunnel --url http://localhost:3100\"",
+    "mcp:ngrok": "concurrently \"node mcp/dist/server.js --http\" \"ngrok http 3100\"",
+    "generate-icons": "node scripts/generate-icons.js",
+    "dev": "npm run build:electron && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "npm run build:electron && vite build",
+    "electron": "npm run build:electron && electron .",
+    "start": "npm run build:electron && vite build && electron .",
+    "dist:mac": "npm run build:backend && npm run build && electron-builder --mac",
+    "dist:win": "npm run build:backend && npm run build && electron-builder --win",
+    "dist:linux": "npm run build:backend && npm run build && electron-builder --linux",
+    "dist": "npm run dist:mac"
+  },
+  "build": {
+    "appId": "com.creatoros.app",
+    "productName": "CreatorOS",
+    "copyright": "Copyright © 2026 Sparsh Upadhyay",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "main.js",
+      "main.js.map",
+      "preload.js",
+      "preload.js.map",
+      "src/pages/browser/automation/**/*.js",
+      "src/pages/browser/automation/**/*.js.map",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist/api_server",
+        "to": "api_server"
+      },
+      {
+        "from": "docs/elite_mode_instruction.md",
+        "to": "elite_mode_instruction.md"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "CreatorOS",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 185,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 185,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  },
+  "dependencies": {
+    "@fontsource-variable/big-shoulders-display": "^5.2.5",
+    "@fontsource-variable/bitter": "^5.2.10",
+    "@fontsource-variable/caveat": "^5.2.8",
+    "@fontsource-variable/crimson-pro": "^5.2.8",
+    "@fontsource-variable/dancing-script": "^5.2.8",
+    "@fontsource-variable/dm-sans": "^5.2.8",
+    "@fontsource-variable/epilogue": "^5.2.8",
+    "@fontsource-variable/figtree": "^5.2.10",
+    "@fontsource-variable/fira-code": "^5.2.7",
+    "@fontsource-variable/fraunces": "^5.2.9",
+    "@fontsource-variable/inconsolata": "^5.2.8",
+    "@fontsource-variable/instrument-sans": "^5.2.8",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/lexend": "^5.2.11",
+    "@fontsource-variable/lora": "^5.2.8",
+    "@fontsource-variable/manrope": "^5.2.8",
+    "@fontsource-variable/montserrat": "^5.2.8",
+    "@fontsource-variable/nunito": "^5.2.7",
+    "@fontsource-variable/open-sans": "^5.2.7",
+    "@fontsource-variable/orbitron": "^5.2.8",
+    "@fontsource-variable/oswald": "^5.2.8",
+    "@fontsource-variable/outfit": "^5.2.8",
+    "@fontsource-variable/playfair-display": "^5.2.8",
+    "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
+    "@fontsource-variable/raleway": "^5.2.8",
+    "@fontsource-variable/rubik": "^5.2.8",
+    "@fontsource-variable/source-code-pro": "^5.2.7",
+    "@fontsource-variable/space-grotesk": "^5.2.10",
+    "@fontsource-variable/urbanist": "^5.2.7",
+    "@fontsource-variable/work-sans": "^5.2.8",
+    "@fontsource/amatic-sc": "^5.2.7",
+    "@fontsource/anton": "^5.2.7",
+    "@fontsource/archivo-black": "^5.2.8",
+    "@fontsource/audiowide": "^5.2.7",
+    "@fontsource/bai-jamjuree": "^5.2.8",
+    "@fontsource/barlow-condensed": "^5.2.8",
+    "@fontsource/be-vietnam-pro": "^5.2.8",
+    "@fontsource/bebas-neue": "^5.2.7",
+    "@fontsource/black-ops-one": "^5.2.8",
+    "@fontsource/bungee": "^5.2.7",
+    "@fontsource/chakra-petch": "^5.2.7",
+    "@fontsource/cormorant-garamond": "^5.2.11",
+    "@fontsource/courgette": "^5.2.7",
+    "@fontsource/courier-prime": "^5.2.8",
+    "@fontsource/dm-serif-display": "^5.2.8",
+    "@fontsource/eb-garamond": "^5.2.7",
+    "@fontsource/exo-2": "^5.2.8",
+    "@fontsource/geist": "^5.2.8",
+    "@fontsource/great-vibes": "^5.2.8",
+    "@fontsource/handjet": "^5.2.7",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/indie-flower": "^5.2.7",
+    "@fontsource/instrument-serif": "^5.2.8",
+    "@fontsource/kalam": "^5.2.8",
+    "@fontsource/lato": "^5.2.7",
+    "@fontsource/libre-baskerville": "^5.2.10",
+    "@fontsource/lobster": "^5.2.8",
+    "@fontsource/merriweather": "^5.2.11",
+    "@fontsource/michroma": "^5.2.8",
+    "@fontsource/onest": "^5.2.11",
+    "@fontsource/pacifico": "^5.2.7",
+    "@fontsource/permanent-marker": "^5.2.7",
+    "@fontsource/plaster": "^5.2.7",
+    "@fontsource/play": "^5.2.8",
+    "@fontsource/poppins": "^5.2.7",
+    "@fontsource/rajdhani": "^5.2.7",
+    "@fontsource/righteous": "^5.2.7",
+    "@fontsource/roboto": "^5.2.10",
+    "@fontsource/russo-one": "^5.2.7",
+    "@fontsource/sacramento": "^5.2.8",
+    "@fontsource/saira-condensed": "^5.2.8",
+    "@fontsource/satisfy": "^5.2.7",
+    "@fontsource/schibsted-grotesk": "^5.2.8",
+    "@fontsource/shadows-into-light": "^5.2.8",
+    "@fontsource/sora": "^5.2.8",
+    "@fontsource/space-mono": "^5.2.9",
+    "@fontsource/spectral": "^5.2.8",
+    "@fontsource/squada-one": "^5.2.8",
+    "@fontsource/syncopate": "^5.2.8",
+    "@fontsource/teko": "^5.2.7",
+    "@fontsource/yellowtail": "^5.2.8",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@rollup/rollup-linux-arm64-gnu": "^4.60.2",
+    "fabric": "^6.4.3",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.383.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-dropzone": "^14.2.3",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.18",
+    "concurrently": "^8.2.2",
+    "electron": "^29.4.6",
+    "electron-builder": "^26.8.1",
+    "postcss": "^8.4.35",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^3.4.1",
+    "to-ico": "^1.1.5",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "wait-on": "^7.2.0"
+  }
+}
