@@ -16,34 +16,6 @@ import type { ContentSchemaConfig } from './types/schema'
 import { bootstrapProfiles } from './utils/profileStorage'
 import type { Post } from './types/domain'
 
-// ── Error Boundary ──────────────────────────────────────────────────────────────
-class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean, error?: Error}> {
-  constructor(props: {children: React.ReactNode}) {
-    super(props)
-    this.state = { hasError: false }
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error }
-  }
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[App ErrorBoundary]', error, info.componentStack)
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{padding: 32, color: '#C96A42', fontFamily: 'monospace', fontSize: 13}}>
-          <h2>App crashed:</h2>
-          <pre style={{whiteSpace: 'pre-wrap'}}>{this.state.error?.message}</pre>
-          <pre style={{whiteSpace: 'pre-wrap', fontSize: 10, opacity: 0.7}}>
-            {this.state.error?.stack?.split('\n').slice(0,5).join('\n')}
-          </pre>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
-
 // ── Schema context ────────────────────────────────────────────────────────────
 
 interface SchemaContextValue {
@@ -232,7 +204,7 @@ function PageSlot({ active, children }: PageSlotProps): React.ReactElement {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
-function AppInner(): React.ReactElement {
+export default function App(): React.ReactElement {
   const [page, setPage]               = useState<PageId>('forge')
   const [backendStatus, setStatus]    = useState<BackendStatus>('checking')
   const [pendingTemplate, setPending] = useState<PendingTemplate | undefined>(undefined)
@@ -518,8 +490,4 @@ function AppInner(): React.ReactElement {
       </div>
     </SchemaContext.Provider>
   )
-}
-
-export default function App(): React.ReactElement {
-  return <ErrorBoundary><AppInner /></ErrorBoundary>
 }
