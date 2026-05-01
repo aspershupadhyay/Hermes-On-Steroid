@@ -1,0 +1,493 @@
+import React, { useState, useEffect, useRef, useCallback, Component, createContext, useContext } from 'react'
+import Sidebar, { type PageId, type BackendStatus } from './components/Sidebar'
+import AiBrowser from './pages/browser/WebSearch'
+import type { AiBrowserHandle } from './pages/browser/WebSearch'
+import type { ImageGenJob } from './types/ipc'
+import DocRAG from './pages/doc-rag/DocRAG'
+import Forge from './pages/forge/Forge'
+import DesignStudio from './pages/studio/DesignStudio'
+import TemplateGallery from './pages/templates/TemplateGallery'
+import PostHistory from './pages/history/PostHistory'
+import Settings from './pages/settings/Settings'
+import { apiFetch } from './api'
+import type { LoadTemplatePayload } from './pages/templates/TemplateGallery'
+import { bootstrapSchemas, getActiveSchema } from './utils/schemaStorage'
+import type { ContentSchemaConfig } from './types/schema'
+import { bootstrapProfiles } from './utils/profileStorage'
+import type { Post } from './types/domain'
+
+// ── Schema context ────────────────────────────────────────────────────────────
+
+interface SchemaContextValue {
+  activeSchema: ContentSchemaConfig
+  /** Call this after saving/changing schemas to refresh the context value */
+  refreshSchema: () => void
+}
+
+export const SchemaContext = createContext<SchemaContextValue>({
+  activeSchema:  getActiveSchema(),
+  refreshSchema: () => {},
+})
+
+/** Hook for any component that needs the active schema */
+export function useActiveSchema(): SchemaContextValue {
+  return useContext(SchemaContext)
+}
+
+// Boot: seed defaults into localStorage if not already present.
+// Runs once synchronously before React renders.
+bootstrapSchemas()
+bootstrapProfiles()
+
+// ── Apply saved theme on startup ──────────────────────────────────────────────
+;(function applyStoredTheme() {
+  try {
+    const theme = localStorage.getItem('app_theme') ?? 'dark'
+    if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light')
+    else document.documentElement.removeAttribute('data-theme')
+  } catch { /* use default dark */ }
+})()
+
+// ── Pending data shapes ───────────────────────────────────────────────────────
+
+interface PendingTemplate extends LoadTemplatePayload {
+  _ts: number
+}
+
+interface PendingContent {
+  title?: string
+  highlight_words?: string | string[]
+  caption?: string
+  _ts: number
+  [key: string]: unknown
+}
+
+interface PendingBatch {
+  _ts: number
+  [key: string]: unknown
+}
+
+interface HealthApiResponse {
+  missing_keys?: string[]
+}
+
+// ── PageErrorBoundary ─────────────────────────────────────────────────────────
+
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode
+}
+
+class PageErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    console.error('[PageErrorBoundary]', error, info)
+  }
+
+  render(): React.ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', height: '100%', gap: 14, padding: 40,
+        }}>
+          <div style={{
+            fontSize: 13, color: 'var(--status-red)', textAlign: 'center',
+            background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+            borderRadius: 12, padding: '20px 28px', maxWidth: 480,
+          }}>
+            <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 14, letterSpacing: '-0.01em' }}>Page error</p>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              {this.state.error?.message || 'Unknown error'}
+            </p>
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{
+              padding: '7px 18px', borderRadius: 8,
+              border: '1px solid var(--border-default)',
+              background: 'transparent', color: 'var(--text-secondary)',
+              fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-ui)',
+              transition: 'all 100ms',
+            }}>
+            Try again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// ── BackendBanner ─────────────────────────────────────────────────────────────
+
+interface BackendBannerProps {
+  status: BackendStatus
+  onRetry: () => void
+}
+
+function BackendBanner({ status, onRetry }: BackendBannerProps): React.ReactElement | null {
+  if (status === 'ok') return null
+  const isDown = status === 'down'
+  return (
+    <div style={{
+      padding: '7px 20px',
+      fontSize: 11,
+      fontWeight: 500,
+      textAlign: 'center',
+      background: isDown ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+      color: isDown ? 'var(--status-red)' : 'var(--status-amber)',
+      borderBottom: `0.5px solid ${isDown ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`,
+      letterSpacing: '0.01em',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+    }}>
+      <span>
+        {isDown
+          ? 'Backend offline — failed to start'
+          : 'Backend degraded — check API keys in Settings'}
+      </span>
+      {isDown && (
+        <button
+          onClick={onRetry}
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            padding: '2px 10px',
+            borderRadius: 4,
+            border: '1px solid rgba(239,68,68,0.4)',
+            background: 'rgba(239,68,68,0.15)',
+            color: 'var(--status-red)',
+            cursor: 'pointer',
+            letterSpacing: '0.04em',
+          }}
+        >
+          RETRY
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── PageSlot ──────────────────────────────────────────────────────────────────
+
+interface PageSlotProps {
+  active: boolean
+  children: React.ReactNode
+}
+
+function PageSlot({ active, children }: PageSlotProps): React.ReactElement {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      display: active ? 'block' : 'none',
+      overflow: 'hidden',
+    }}>
+      {children}
+    </div>
+  )
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App(): React.ReactElement {
+  const [page, setPage]               = useState<PageId>('forge')
+  const [backendStatus, setStatus]    = useState<BackendStatus>('checking')
+  const [pendingTemplate, setPending] = useState<PendingTemplate | undefined>(undefined)
+  const [pendingContent, setContent]  = useState<PendingContent | undefined>(undefined)
+  const [pendingBatch, setPendingBatch] = useState<PendingBatch | undefined>(undefined)
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState<number>(0)
+  const [activeSchema, setActiveSchema] = useState<ContentSchemaConfig>(getActiveSchema)
+  const refreshSchema = (): void => { setActiveSchema(getActiveSchema()) }
+
+  // ── Image generation pipeline ─────────────────────────────────────────────
+  // generatedImages: postId → file:// URL — fed to Forge (PostCard) + Studio (canvas)
+  // imageGenQueue: set of postIds currently in-flight in the ChatGPT pipeline
+  const [generatedImages, setGeneratedImages] = useState<Map<string, string>>(new Map())
+  const [imageGenQueue, setImageGenQueue] = useState<Set<string>>(new Set())
+  const aiBrowserRef = useRef<AiBrowserHandle | null>(null)
+
+  // Called by AiBrowser when an image finishes capturing & passes quality check.
+  // Reads the local file via IPC (file:// is blocked from http:// origin in dev).
+  const handleImageReady = useCallback((postId: string, filePath: string): void => {
+    void (async () => {
+      const dataUrl = await window.api?.readLocalImage?.(filePath) ?? `file://${filePath}`
+      if (!dataUrl) return
+      setGeneratedImages(prev => {
+        const next = new Map(prev)
+        next.set(postId, dataUrl)
+        return next
+      })
+      // Remove from queue so PostCard shimmer stops
+      setImageGenQueue(prev => {
+        const next = new Set(prev)
+        next.delete(postId)
+        return next
+      })
+    })()
+  }, [])
+
+  const startImageGenForBatch = useCallback(async (posts: Post[]): Promise<void> => {
+    const IMAGE_PROMPT_FIELDS = ['image_prompt_1x1', 'image_prompt_9x16', 'image_prompt_16x9', 'image_prompt']
+
+    const jobs: ImageGenJob[] = []
+    posts.forEach((p, i) => {
+      const fields = p.fields ?? {}
+      let prompt = ''
+      for (const key of IMAGE_PROMPT_FIELDS) {
+        if (fields[key]?.trim()) { prompt = fields[key].trim(); break }
+      }
+      if (prompt) jobs.push({ postId: p.id, prompt, pageIndex: i, targetEliteType: 'image' })
+    })
+
+    if (!jobs.length) {
+      console.warn('[App] No posts have image_prompt_* fields — skipping image gen')
+      return
+    }
+
+    setImageGenQueue(new Set(jobs.map(j => j.postId)))
+
+    const unsub = window.api?.onImageGenProgress?.((progress) => {
+      if (progress.status === 'done' && progress.tmpPath) {
+        void (async () => {
+          const dataUrl = await window.api?.readLocalImage?.(progress.tmpPath!) ?? `file://${progress.tmpPath}`
+          setGeneratedImages(prev => { const n = new Map(prev); n.set(progress.postId, dataUrl); return n })
+          setImageGenQueue(prev => { const n = new Set(prev); n.delete(progress.postId); return n })
+        })()
+      } else if (progress.status === 'error') {
+        setImageGenQueue(prev => { const n = new Set(prev); n.delete(progress.postId); return n })
+      }
+    })
+
+    await window.api?.startImageGen?.({ jobs })
+    unsub?.()
+  }, [])
+
+  // Called by Studio when batch pre-render is complete — replaces arbitrary 1500ms setTimeout
+  const handleBatchRenderComplete = useCallback((posts: Post[]): void => {
+    void startImageGenForBatch(posts)
+  }, [startImageGenForBatch])
+
+  // Keep schema in sync when any component calls setActiveSchema() or saveSchema()
+  useEffect(() => {
+    const handler = (): void => { setActiveSchema(getActiveSchema()) }
+    window.addEventListener('schemasChange', handler)
+    return (): void => { window.removeEventListener('schemasChange', handler) }
+  }, [])
+
+  const checkHealth = useCallback(async () => {
+    let attempts = 0
+    const MAX_ATTEMPTS = 25  // 25 x 2s = 50s total wait for PyInstaller cold start
+    async function attempt(): Promise<void> {
+      const { data, error } = await apiFetch<HealthApiResponse>('/api/health')
+      attempts++
+      if (error) {
+        if (attempts < MAX_ATTEMPTS) setTimeout(() => void attempt(), 2000)
+        else setStatus('down')
+        return
+      }
+      setStatus((data as HealthApiResponse)?.missing_keys?.length ? 'degraded' : 'ok')
+    }
+    void attempt()
+  }, [])
+
+  // Listen for backend status events from main process (IPC-driven, no polling)
+  useEffect(() => {
+    const unsub = window.api.onBackendStatus?.((status) => {
+      if (status === 'up') void checkHealth()
+      else if (status === 'crashed') setStatus('down')
+      // 'starting' → keep 'checking' state
+    })
+    // Fallback: also poll in case the 'up' event was missed (window loaded late)
+    void checkHealth()
+    return () => { unsub?.() }
+  }, [checkHealth])
+
+  // Re-run health check when user saves API keys in Settings — clears the "degraded" banner instantly
+  useEffect(() => {
+    const handler = (): void => { void checkHealth() }
+    window.addEventListener('apiKeySaved', handler)
+    return (): void => { window.removeEventListener('apiKeySaved', handler) }
+  }, [checkHealth])
+
+  const handleRetry = useCallback(async () => {
+    setStatus('checking')
+    await window.api.restartBackend?.()
+    void checkHealth()
+  }, [checkHealth])
+
+  // ── MCP app-level bridge ─────────────────────────────────────────────────
+  // Handles app:command IPC events from the Electron main process bridge.
+  // Tools: navigate_to, get_app_state, get_settings, save_api_keys, update_appearance
+  useEffect(() => {
+    const { onAppCommand, sendAppResult } = window.api ?? {}
+    if (!onAppCommand || !sendAppResult) return
+
+    const cleanup = onAppCommand(async (cmd) => {
+      const { requestId, tool, params } = cmd
+      try {
+        let data: unknown = null
+
+        if (tool === 'navigate_to') {
+          const validPages = ['web', 'doc', 'forge', 'studio', 'templates', 'history', 'settings']
+          const target = String(params.page || '')
+          if (!validPages.includes(target)) throw new Error(`invalid page "${target}". Valid: ${validPages.join(', ')}`)
+          setPage(target as import('./components/Sidebar').PageId)
+          data = { navigated: target }
+
+        } else if (tool === 'get_app_state') {
+          data = {
+            currentPage: page,
+            backendStatus,
+            theme: localStorage.getItem('app_theme') ?? 'dark',
+            appearance: (() => { try { return JSON.parse(localStorage.getItem('app_appearance') ?? '{}') } catch { return {} } })(),
+          }
+
+        } else if (tool === 'get_settings') {
+          const setupResult = await window.api.setupCheck?.().catch(() => null)
+          data = {
+            configured:  setupResult?.configured ?? false,
+            missingKeys: setupResult?.missingKeys ?? [],
+            chatGptUrl: (await window.api.getImageGenConfig?.().catch(() => null))?.chatGptUrl ?? null,
+          }
+
+        } else if (tool === 'save_api_keys') {
+          const result = await window.api.setupSaveConfig({
+            nvidiaKey: String(params.nvidiaKey ?? ''),
+            tavilyKey: String(params.tavilyKey ?? ''),
+          })
+          if (!result.ok) throw new Error(result.error ?? 'save failed')
+          window.dispatchEvent(new Event('apiKeySaved'))
+          data = { saved: true }
+
+        } else if (tool === 'set_chatgpt_url') {
+          await window.api.setImageGenUrl?.(String(params.url ?? ''))
+          data = { url: params.url }
+
+        } else if (tool === 'update_appearance') {
+          const current = (() => { try { return JSON.parse(localStorage.getItem('app_appearance') ?? '{}') } catch { return {} } })() as Record<string, unknown>
+          const merged = { ...current, ...params }
+          localStorage.setItem('app_appearance', JSON.stringify(merged))
+          if (params.theme) {
+            localStorage.setItem('app_theme', String(params.theme))
+            if (params.theme === 'light') document.documentElement.setAttribute('data-theme', 'light')
+            else document.documentElement.removeAttribute('data-theme')
+          }
+          window.dispatchEvent(new Event('appearanceChange'))
+          data = { applied: merged }
+
+        } else {
+          throw new Error(`unknown app tool "${tool}". Available: navigate_to, get_app_state, get_settings, save_api_keys, set_chatgpt_url, update_appearance`)
+        }
+
+        sendAppResult({ requestId, success: true, data })
+      } catch (err) {
+        sendAppResult({ requestId, success: false, error: err instanceof Error ? err.message : String(err) })
+      }
+    })
+
+    return cleanup
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, backendStatus])
+
+  const handleLoadTemplate = (templateData: LoadTemplatePayload): void => {
+    setPending({ ...templateData, _ts: Date.now() })
+    setPage('studio')
+  }
+
+  // Refresh gallery every time the user navigates to it so thumbnails are always fresh
+  const handleNav = useCallback((id: import('./components/Sidebar').PageId): void => {
+    if (id === 'templates') setGalleryRefreshKey(k => k + 1)
+    setPage(id)
+  }, [])
+
+  // Called from ContentGen when user hits "Send to Studio" (single post)
+  const handleApplyContent = (post: import('./types/domain').Post): void => {
+    setContent({ ...post, _ts: Date.now() })
+    setPage('studio')
+  }
+
+  // Called from Forge when batch generation completes (N posts → N pages)
+  const handleBatchToStudio = (posts: Post[], templateJSON?: string): void => {
+    // 1. Reset previous image gen state
+    aiBrowserRef.current?.cancelQueue()
+    setGeneratedImages(new Map())
+
+    // 2. Send text content to Studio (canvas pre-render)
+    //    Studio calls back via onBatchRenderComplete when ready for image gen
+    setPendingBatch({ posts, templateJSON, _ts: Date.now() })
+    setPage('studio')
+  }
+
+  return (
+    <SchemaContext.Provider value={{ activeSchema, refreshSchema }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--surface-0)' }}>
+        <BackendBanner status={backendStatus} onRetry={handleRetry} />
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+          <Sidebar current={page} onNav={handleNav} backendStatus={backendStatus} />
+          <main style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <PageSlot active={page === 'web'}>
+              <PageErrorBoundary>
+                <AiBrowser ref={aiBrowserRef} onImageReady={handleImageReady} />
+              </PageErrorBoundary>
+            </PageSlot>
+            <PageSlot active={page === 'doc'}>
+              <PageErrorBoundary><DocRAG /></PageErrorBoundary>
+            </PageSlot>
+            <PageSlot active={page === 'forge'}>
+              <PageErrorBoundary>
+                <Forge
+                  onSendToStudio={handleApplyContent}
+                  onBatchToStudio={handleBatchToStudio}
+                  generatedImages={generatedImages}
+                  imageGenQueue={imageGenQueue}
+                />
+              </PageErrorBoundary>
+            </PageSlot>
+            <PageSlot active={page === 'studio'}>
+              <PageErrorBoundary>
+                <DesignStudio
+                  pendingTemplate={pendingTemplate as import('./types/domain').Template | undefined}
+                  pendingContent={pendingContent as import('./types/domain').Post | undefined}
+                  pendingBatch={pendingBatch as { posts: Post[]; templateJSON?: string } | undefined}
+                  onTemplateSaved={() => { setGalleryRefreshKey(k => k + 1); setPage('templates') }}
+                  onBatchRenderComplete={handleBatchRenderComplete}
+                  isActive={page === 'studio'}
+                  generatedImages={generatedImages}
+                />
+              </PageErrorBoundary>
+            </PageSlot>
+            <PageSlot active={page === 'templates'}>
+              <PageErrorBoundary>
+                <TemplateGallery onLoadTemplate={handleLoadTemplate} refreshKey={galleryRefreshKey}/>
+              </PageErrorBoundary>
+            </PageSlot>
+            <PageSlot active={page === 'history'}>
+              <PageErrorBoundary><PostHistory onSendToStudio={handleApplyContent} /></PageErrorBoundary>
+            </PageSlot>
+            <PageSlot active={page === 'settings'}>
+              <PageErrorBoundary>
+                <Settings />
+              </PageErrorBoundary>
+            </PageSlot>
+          </main>
+        </div>
+
+      </div>
+    </SchemaContext.Provider>
+  )
+}
