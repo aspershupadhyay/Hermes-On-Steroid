@@ -1,0 +1,66 @@
+{
+  "tavily": {
+    "search_depth": "advanced",
+    "max_results": 20,
+    "chunks_per_source": 5,
+    "include_answer": "advanced",
+    "time_range": "day",
+    "topic": "news",
+    "include_images": false,
+    "include_raw_content": "markdown",
+    "include_domains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "bloomberg.com",
+      "ft.com",
+      "wsj.com",
+      "economist.com",
+      "theguardian.com",
+      "nytimes.com",
+      "washingtonpost.com",
+      "aljazeera.com",
+      "france24.com",
+      "dw.com",
+      "cnbc.com",
+      "marketwatch.com",
+      "techcrunch.com",
+      "wired.com",
+      "theverge.com",
+      "arstechnica.com",
+      "nature.com",
+      "science.org",
+      "un.org",
+      "who.int",
+      "imf.org",
+      "worldbank.org",
+      "foreignpolicy.com",
+      "foreignaffairs.com",
+      "cfr.org"
+    ],
+    "exclude_domains": []
+  },
+  "nvidia": {
+    "llm_model": "meta/llama-3.1-405b-instruct",
+    "embed_model": "nvidia/llama-3.2-nv-embedqa-1b-v2",
+    "rerank_model": "nvidia/llama-nemotron-rerank-1b-v2",
+    "max_tokens": 8192,
+    "top_n_rerank": 4
+  },
+  "output": {
+    "title_min_length": 60,
+    "title_max_length": 110,
+    "include_hook": false,
+    "include_category": false,
+    "include_9x16": false,
+    "include_sources_block": true
+  },
+  "persona": {
+    "persona": "finance",
+    "tone": "analytical",
+    "platform_target": "instagram",
+    "caption_length": "long",
+    "custom_instructions": ""
+  }
+}
