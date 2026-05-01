@@ -201,7 +201,6 @@
     "@fontsource/teko": "^5.2.7",
     "@fontsource/yellowtail": "^5.2.8",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@rollup/rollup-linux-arm64-gnu": "^4.60.2",
     "fabric": "^6.4.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.383.0",
